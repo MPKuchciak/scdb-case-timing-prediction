@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/ # If you move notebooks to a notebooks/ folder
+
+# IDE / Editor specific
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+nbproject/
+*.swp
+
+# OS specific
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Data folder specifics
+
+# Archive (often local backups or old versions not for main repo)
+archive/*
+!archive/.gitkeep
+
+# Python package distribution
+dist/
+build/
+*.egg
+*.whl
+
+# Other
+*.log
+*.tmp
+*.temp
