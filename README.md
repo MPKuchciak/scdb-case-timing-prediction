@@ -1,24 +1,30 @@
 ```
 scdb-case-timing-prediction/
-├── .git/                                         # Git directory (hidden)
-├── .gitattributes                                # Git attributes file
-├── .gitignore                                    # Git ignore file
-├── data/                                         # Data sub-directory
-│   ├── raw/                                      # Raw data sub-directory
-│   │   ├── SCDB_2024_01_caseCentered_Docket.csv  # Pimary raw input
-│   │   └── SCDB_2024_01_caseCentered_Vote.csv    # Another raw SCDB file
-│   ├── scdb_eda.csv                              # Processed data output part 2
-│   └── scdb_processed_part1.csv                  # Processed data output part 1
-├── models/                                       # For saved machine learning models
-├── presentation/                                 # For presentations, reports
-├── src/                                          # For source Python scripts (utility functions, etc.)
-├── archive/                                      # For older files, backups
-├── 001_DataCleaning.ipynb                        # Data cleaning notebook 
-├── eda.ipynb                                     # EDA notebook 
-├── ModelXGboost.ipynb                            # XGBoost modeling notebook 
-├── SCDB_2024_01_codebook.pdf                     # SCDB Codebook PDF 
-├── variable_description.pdf                      # Your variable descriptions 
-├── Untitled-1 - Copy.ipynb                       # temporary notebook
-├── README.md                                     # Project description
-└── requirements.txt                              # Python package dependencies
+├── .git/                             # Git's internal directory
+├── .gitattributes                    # Defines attributes for paths
+├── .gitignore                        # Specifies intentionally untracked files
+├── data/
+│   ├── raw/                          # For original, immutable data
+│   │   ├── SCDB_2024_01_caseCentered_Docket.csv
+│   │   └── SCDB_2024_01_caseCentered_Vote.csv # If used
+│   ├── processed/                      # For cleaned, transformed data (intermediate/final)
+│   │   ├── scdb_processed_part1.csv    # Output of 001_DataCleaning.ipynb
+│   │   └── scdb_eda.csv                # Data for EDA notebook (maybe same as processed)
+│   └── external/                       # (Optional) For any other external data
+├── notebooks/                        # For all Jupyter notebooks
+│   ├── 001_DataCleaning.ipynb
+│   ├── 002_EDA.ipynb                 # Renamed from eda.ipynb for sequence
+│   ├── 003_ModelXGboost.ipynb        # Renamed from ModelXGboost.ipynb for sequence
+│   └── (Untitled-1 - Copy.ipynb)     # Consider renaming or moving to archive/ if a scratchpad
+├── src/                              # For Python source code (.py files, utility scripts)
+├── models/                           # For saved trained models (e.g., .pkl, .joblib files)
+├── presentation/                     # For slides, presentation materials
+├── reports/                          # (Consider adding) For generated reports, figures
+│   └── figures/                      # For plots saved from notebooks/scripts
+├── docs/                             # (Consider adding) For documentation
+│   ├── SCDB_2024_01_codebook.pdf
+│   └── variable_description.pdf
+├── archive/                          # For old/unused files
+├── README.md                         # Project overview, setup, how to run
+└── requirements.txt                  # Python package dependencies
 ```
