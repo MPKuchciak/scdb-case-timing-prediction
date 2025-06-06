@@ -1,0 +1,12 @@
+{
+  "best_overall": {
+    "name": "Optuna_full_with_leakage",
+    "path": "../models\\scdb_duration_full_with_leakage_optuna_v1\\scdb_duration_full_with_leakage_optuna_v1.joblib",
+    "rmse": 17.915530226406503
+  },
+  "best_no_leakage": {
+    "name": "Optuna_leakage_controlled",
+    "path": "../models\\scdb_duration_leakage_controlled_optuna_v1\\scdb_duration_leakage_controlled_optuna_v1.joblib",
+    "rmse": 40.84148358261902
+  }
+}
