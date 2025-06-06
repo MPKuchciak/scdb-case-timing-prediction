@@ -27,6 +27,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler, OneHotEncoder, LabelEncoder
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from scipy.stats import uniform, randint
 
 # Plotting
 import matplotlib.pyplot as plt
@@ -44,15 +45,15 @@ sns.set_palette("husl")
 
 class XGBoostModelTrainer:
     """
-    Enhanced XGBoost training pipeline with parameter optimization, CUDA support,
-    automatic versioning, and comprehensive XAI preparation for Supreme Court case duration prediction.
+    XGBoost training pipeline with parameter optimization, CUDA support,
+    automatic versioning, and XAI preparation for Supreme Court Case Duration prediction / analysis.
     """
     
     def __init__(self, output_dir: str = "../models", enable_cuda: bool = True, 
-                 plot_dir: str = "../plots", random_state: int = 42, 
+                 plot_dir: str = "../plots", random_state: int = 420, 
                  organize_by_model: bool = True):
         """
-        Initialize the enhanced trainer.
+        Initialize the trainer.
         
         Args:
             output_dir (str): Directory to save models and metadata
@@ -94,7 +95,7 @@ class XGBoostModelTrainer:
                     device_info['tree_method'] = 'gpu_hist'
                     # Try to get device count
                     try:
-                        gpu_count = result.stdout.count('GPU ')
+                        gpu_count = result.stdout.count('GPU') #3?
                         device_info['cuda_device_count'] = gpu_count
                     except:
                         device_info['cuda_device_count'] = 1
@@ -185,7 +186,8 @@ class XGBoostModelTrainer:
         """
         if self.organize_by_model:
             model_dir = os.path.join(self.output_dir, model_name)
-            plot_dir = os.path.join(self.plot_dir, model_name)
+            #plot_dir = os.path.join(self.plot_dir, model_name) # old
+            plot_dir = os.path.join(model_dir, 'plots')
             
             for directory in [model_dir, plot_dir]:
                 if not os.path.exists(directory):
@@ -207,62 +209,78 @@ class XGBoostModelTrainer:
                 'plot_path': os.path.join(self.plot_dir, f"{model_name}_diagnostics.pdf")
             }
     
-    def generate_custom_parameters(self, seed: Optional[int] = None) -> Dict[str, Any]:
+    def prepare_data_splits(self, X: pd.DataFrame, y: pd.Series, 
+                        test_size: float = 0.2, eval_size: float = 0.15,
+                        stratify_by_target: bool = True) -> Tuple:
         """
-        Generate custom parameters using the same ranges as Optuna optimization.
+        Create train/validation/test splits with optional stratification.
         
         Args:
-            seed (int): Random seed for reproducible parameter generation
+            X: Feature matrix
+            y: Target variable
+            test_size: Proportion for test set (default: 0.2)
+            eval_size: Proportion for validation set (default: 0.15)
+            stratify_by_target: Whether to stratify by binned target values
             
         Returns:
-            Dict of sampled parameters
+            Tuple of (X_train, X_val, X_test, y_train, y_val, y_test)
+            Tuple of splits AND a boolean indicating if stratification was used.
         """
-        if seed is not None:
-            np.random.seed(seed)
-        
-        # Sample parameters using the same ranges as Optuna
-        custom_params = {
-            'n_estimators': np.random.randint(400, 2501),
-            'learning_rate': np.random.lognormal(np.log(0.05), 0.5),  # Log-normal around 0.05
-            'max_depth': np.random.randint(4, 11),
-            'subsample': np.round(np.random.uniform(0.6, 1.0), 2),
-            'colsample_bytree': np.round(np.random.uniform(0.6, 1.0), 2),
-            'gamma': np.random.lognormal(np.log(1e-6), 2),  # Log-normal
-            'min_child_weight': np.random.randint(1, 16),
-            'reg_lambda': np.random.lognormal(np.log(1), 1),  # Log-normal around 1
-            'reg_alpha': np.random.lognormal(np.log(0.1), 1),  # Log-normal around 0.1
-        }
-        
-        # Clip values to ensure they're within bounds
-        custom_params['learning_rate'] = np.clip(custom_params['learning_rate'], 0.01, 0.3)
-        custom_params['gamma'] = np.clip(custom_params['gamma'], 1e-8, 1.0)
-        custom_params['reg_lambda'] = np.clip(custom_params['reg_lambda'], 1e-8, 10.0)
-        custom_params['reg_alpha'] = np.clip(custom_params['reg_alpha'], 1e-8, 10.0)
-        
-        return custom_params
-    
-    def prepare_data_splits(self, X: pd.DataFrame, y: pd.Series, 
-                           test_size: float = 0.2, eval_size: float = 0.15) -> Tuple:
-        """Create stratified train/validation/test splits."""
         print("Creating data splits...")
         
-        # Initial train-test split
-        X_train_full, X_test, y_train_full, y_test = train_test_split(
-            X, y, test_size=test_size, random_state=self.random_state, shuffle=True
+        # For stratification on regression target, bin the values
+        stratify_col = None
+        stratification_was_used = False # Initialize as False
+        if stratify_by_target:
+            try:
+                # Create bins for stratification
+                y_bins = pd.qcut(y, q=min(5, y.nunique()), labels=False, duplicates='drop')
+                if y_bins.nunique() > 1:
+                    stratify_col = y_bins
+                    stratification_was_used = True # Set to True if successful
+                    print("Using stratified sampling based on duration bins.")
+                else:
+                    print("Warning: Could not create enough bins for stratification. Proceeding without.")
+            except Exception as e:
+                print(f"Warning: Could not create stratification bins: {e}. Proceeding without stratification.")
+        
+        # First split: separate test set
+        X_train_val, X_test, y_train_val, y_test = train_test_split(
+            X, y, test_size=test_size, random_state=self.random_state, 
+            shuffle=True, stratify=stratify_col
         )
         
-        # Further split training data for validation
+        # Calculate validation size from remaining data
+        # We want 15% of total data as validation
+        # We have 80% as train_val, so validation should be 15/80 = 0.1875 of train_val
+        val_size_from_train_val = eval_size / (1 - test_size)
+        
+        # Second split: separate train and validation
+        stratify_col_train_val = None
+        if stratification_was_used and stratify_col is not None:
+            stratify_col_train_val = stratify_col.loc[X_train_val.index]
+            if stratify_col_train_val.nunique() < 2:
+                # If the smaller dataset doesn't have enough bin diversity, can't stratify
+                stratify_col_train_val = None
+
         X_train, X_val, y_train, y_val = train_test_split(
-            X_train_full, y_train_full, test_size=eval_size, 
-            random_state=self.random_state, shuffle=True
+            X_train_val, y_train_val, test_size=val_size_from_train_val, 
+            random_state=self.random_state, shuffle=True, 
+            stratify=stratify_col_train_val
         )
+        
+        # Verify splits
+        train_pct = len(X_train) / len(X) * 100
+        val_pct = len(X_val) / len(X) * 100
+        test_pct = len(X_test) / len(X) * 100
         
         print(f"Data splits created:")
-        print(f"   Train: {X_train.shape[0]} samples ({len(X_train)/len(X)*100:.1f}%)")
-        print(f"   Validation: {X_val.shape[0]} samples ({len(X_val)/len(X)*100:.1f}%)")
-        print(f"   Test: {X_test.shape[0]} samples ({len(X_test)/len(X)*100:.1f}%)")
+        print(f"   Train: {X_train.shape[0]} samples ({train_pct:.1f}%)")
+        print(f"   Validation: {X_val.shape[0]} samples ({val_pct:.1f}%)")
+        print(f"   Test: {X_test.shape[0]} samples ({test_pct:.1f}%)")
+        print(f"   Total: {len(X)} samples (sum: {train_pct + val_pct + test_pct:.1f}%)")
         
-        return X_train, X_val, X_test, y_train, y_val, y_test
+        return X_train, X_val, X_test, y_train, y_val, y_test, stratification_was_used
     
     def create_preprocessor(self, numerical_features: List[str], 
                           categorical_features: List[str]) -> ColumnTransformer:
@@ -424,58 +442,79 @@ class XGBoostModelTrainer:
         }
     
     def optimize_parameters_sklearn(self, X_train: np.ndarray, y_train: np.ndarray,
-                                   cv: int = 3, n_iter: int = 50,
-                                   early_stopping_rounds: int = 50) -> Dict[str, Any]:
+                                    cv: int = 3, n_iter: int = 50,
+                                    early_stopping_rounds: int = 50) -> Dict[str, Any]:
         """
         Optimize parameters using sklearn's RandomizedSearchCV.
-        
-        Args:
-            X_train, y_train: Training data
-            cv: Number of cross-validation folds
-            n_iter: Number of iterations for random search
-            early_stopping_rounds: Early stopping rounds for XGBoost
-            
-        Returns:
-            Dict containing best parameters and search results
+        Early stopping is disabled during the CV process itself to avoid fit errors,
+        but the early_stopping_rounds parameter is retained for the final model params.
         """
-        base_params = self.get_base_xgboost_params()
-        base_params['early_stopping_rounds'] = early_stopping_rounds
         
-        search_spaces = self.get_optimization_search_spaces()
+        # Prepare constructor parameters for XGBRegressor used within RandomizedSearchCV.
+        # We explicitly remove 'early_stopping_rounds' for the CV part.
+        xgb_constructor_params_for_cv = self.get_base_xgboost_params()
+        if 'early_stopping_rounds' in xgb_constructor_params_for_cv:
+            del xgb_constructor_params_for_cv['early_stopping_rounds']
+        # Also ensure no lingering eval_set if it was somehow in base_params
+        if 'eval_set' in xgb_constructor_params_for_cv:
+             del xgb_constructor_params_for_cv['eval_set']
+
+        search_spaces_config = self.get_optimization_search_spaces()
+        random_space_config = search_spaces_config['random_search']
         
         param_dist = {}
-        random_space = search_spaces['random_search']
-        for param, bounds in random_space.items():
-            if isinstance(bounds, list) and len(bounds) == 2:
-                if param in ['n_estimators', 'max_depth', 'min_child_weight']:
-                    param_dist[param] = range(bounds[0], bounds[1] + 1)
+        for param, bounds_config in random_space_config.items():
+            if not (isinstance(bounds_config, list) and len(bounds_config) == 2):
+                print(f"Warning: Configuration for {param} in random_search space is not a list of [low, high]. Skipping.")
+                continue
+
+            low_bound, high_bound = bounds_config[0], bounds_config[1]
+
+            if param in ['n_estimators', 'max_depth', 'min_child_weight']:
+                if high_bound < low_bound:
+                    print(f"Warning: For integer param {param}, high_bound {high_bound} < low_bound {low_bound}. Using low_bound only.")
+                    param_dist[param] = randint(low_bound, low_bound + 1) 
                 else:
-                    param_dist[param] = np.linspace(bounds[0], bounds[1], 20)
-                    
-        print(f"Starting Randomized Search with {n_iter} iterations and {cv}-fold CV...")
+                    param_dist[param] = randint(low_bound, high_bound + 1)
+            else: # Assuming float parameters
+                if high_bound < low_bound:
+                    print(f"Warning: For float param {param}, high_bound {high_bound} < low_bound {low_bound}. Using low_bound value.")
+                    param_dist[param] = uniform(loc=low_bound, scale=0)
+                else:
+                    param_dist[param] = uniform(loc=low_bound, scale=high_bound - low_bound)
+
+        print(f"Starting Randomized Search with {n_iter} iterations and {cv}-fold CV (early stopping disabled for CV process)...")
+        
         search = RandomizedSearchCV(
-            xgb.XGBRegressor(**base_params),
-            param_dist,
+            estimator=xgb.XGBRegressor(**xgb_constructor_params_for_cv), # No early stopping params here
+            param_distributions=param_dist,
             n_iter=n_iter,
             cv=cv,
             scoring='neg_root_mean_squared_error',
             n_jobs=-1,
             random_state=self.random_state,
-            verbose=1
+            verbose=1,
+            error_score='raise' # Helps in debugging if other issues arise
         )
         
-        # Fit
-        search.fit(X_train, y_train)
+        # Fit without any early stopping related fit_params
+        search.fit(X_train, y_train) 
         
         print(f"Random search completed!")
-        print(f"  Best RMSE: {-search.best_score_:.4f}")
+        print(f"Best RMSE: {-search.best_score_:.4f}")
         
-        # Combine best parameters with base parameters
-        best_params = base_params.copy()
-        best_params.update(search.best_params_)
+        # Start with a fresh set of base parameters for the final model.
+        final_best_params = self.get_base_xgboost_params()
+        # Update with the hyperparameters found by RandomizedSearchCV.
+        final_best_params.update(search.best_params_)
+        
+        # Now, add the original 'early_stopping_rounds' to these best_params.
+        # This ensures that when the final model is trained (outside this function, in train_model),
+        # it will use the desired early stopping rounds.
+        final_best_params['early_stopping_rounds'] = early_stopping_rounds
         
         return {
-            'best_params': best_params,
+            'best_params': final_best_params,
             'best_score': -search.best_score_,
             'search_results': search,
             'cv_results': search.cv_results_
@@ -522,9 +561,10 @@ class XGBoostModelTrainer:
         }
     
     def perform_advanced_cross_validation(self, X: np.ndarray, y: np.ndarray, 
-                                         params: Dict[str, Any], cv: int = 5) -> Dict[str, Any]:
+                                        params: Dict[str, Any], cv: int = 5) -> Dict[str, Any]:
         """
-        Perform advanced cross-validation that supports early stopping.
+        Perform advanced cross-validation with early stopping support.
+        Uses the validation fold directly for early stopping instead of creating another split.
         
         Args:
             X: Feature matrix
@@ -544,37 +584,30 @@ class XGBoostModelTrainer:
         early_stopping_info = []
         
         for fold, (train_idx, val_idx) in enumerate(kf.split(X)):
-            print(f"  Fold {fold + 1}/{cv}")
+            print(f"  Fold {fold + 1}/{cv}", end='')
             
             # Split data for this fold
             X_train_fold, X_val_fold = X[train_idx], X[val_idx]
             y_train_fold, y_val_fold = y[train_idx], y[val_idx]
             
-            # Further split training data for early stopping if needed
+            # Train model
+            model = xgb.XGBRegressor(**params)
+            
             if 'early_stopping_rounds' in params and params['early_stopping_rounds'] > 0:
-                # Split train into train/early_stop_val (80/20)
-                split_idx = int(0.8 * len(X_train_fold))
-                X_train_es = X_train_fold[:split_idx]
-                X_val_es = X_train_fold[split_idx:]
-                y_train_es = y_train_fold[:split_idx]
-                y_val_es = y_train_fold[split_idx:]
-                
-                # Train with early stopping
-                model = xgb.XGBRegressor(**params)
+                # Use the fold's validation set for early stopping
                 model.fit(
-                    X_train_es, y_train_es,
-                    eval_set=[(X_val_es, y_val_es)],
+                    X_train_fold, y_train_fold,
+                    eval_set=[(X_val_fold, y_val_fold)],
                     verbose=False
                 )
                 
                 early_stopping_info.append({
                     'fold': fold + 1,
-                    'best_iteration': getattr(model, 'best_iteration', params.get('n_estimators', 100)),
-                    'best_score': getattr(model, 'best_score', None)
+                    'best_iteration': model.best_iteration if hasattr(model, 'best_iteration') else params.get('n_estimators', 100),
+                    'best_score': model.best_score if hasattr(model, 'best_score') else None
                 })
             else:
                 # Train without early stopping
-                model = xgb.XGBRegressor(**params)
                 model.fit(X_train_fold, y_train_fold)
                 
                 early_stopping_info.append({
@@ -588,9 +621,12 @@ class XGBoostModelTrainer:
             fold_rmse = np.sqrt(mean_squared_error(y_val_fold, y_pred))
             cv_scores.append(fold_rmse)
             
-            print(f"    Fold {fold + 1} RMSE: {fold_rmse:.4f}")
+            print(f" - RMSE: {fold_rmse:.4f}")
         
         cv_scores = np.array(cv_scores)
+        
+        # Calculate average best iteration for early stopping
+        avg_best_iter = np.mean([info['best_iteration'] for info in early_stopping_info if info['best_iteration'] is not None])
         
         return {
             'cv_scores': cv_scores,
@@ -598,9 +634,177 @@ class XGBoostModelTrainer:
             'cv_std': cv_scores.std(),
             'cv_folds': cv,
             'early_stopping_info': early_stopping_info,
-            'avg_best_iteration': np.mean([info['best_iteration'] for info in early_stopping_info])
+            'avg_best_iteration': avg_best_iter
         }
-    
+
+    def plot_cv_results(self, cv_results: Dict[str, Any], save_path: Optional[str] = None):
+        """Create enhanced visualization for cross-validation results"""
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        import numpy as np
+        
+        fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+        
+        cv_scores = cv_results['cv_scores']
+        
+        # Plot 1: CV Scores with confidence interval
+        folds = range(1, len(cv_scores) + 1)
+        mean_score = cv_scores.mean()
+        std_score = cv_scores.std()
+        
+        axes[0,0].plot(folds, cv_scores, 'o-', color='blue', linewidth=2, markersize=8, label='Fold Scores')
+        axes[0,0].axhline(mean_score, color='red', linestyle='--', linewidth=2, label=f'Mean: {mean_score:.3f}')
+        axes[0,0].fill_between(range(len(cv_scores)+2), 
+                            mean_score - std_score, 
+                            mean_score + std_score, 
+                            alpha=0.2, color='red', label=f'±1 STD: {std_score:.3f}')
+        axes[0,0].set_xlabel('Fold Number')
+        axes[0,0].set_ylabel('RMSE')
+        axes[0,0].set_title('Cross-Validation Scores Across Folds')
+        axes[0,0].legend()
+        axes[0,0].grid(True, alpha=0.3)
+        axes[0,0].set_xlim(0.5, len(cv_scores) + 0.5)
+        
+        # Plot 2: Cumulative mean and variance
+        cumulative_mean = np.array([cv_scores[:i+1].mean() for i in range(len(cv_scores))])
+        cumulative_std = np.array([cv_scores[:i+1].std() for i in range(len(cv_scores))])
+        
+        axes[0,1].plot(folds, cumulative_mean, 'g-', linewidth=2, label='Cumulative Mean')
+        axes[0,1].fill_between(folds, 
+                            cumulative_mean - cumulative_std, 
+                            cumulative_mean + cumulative_std, 
+                            alpha=0.3, color='green')
+        axes[0,1].set_xlabel('Number of Folds')
+        axes[0,1].set_ylabel('Cumulative Mean RMSE')
+        axes[0,1].set_title('CV Score Stability')
+        axes[0,1].legend()
+        axes[0,1].grid(True, alpha=0.3)
+        
+        # Plot 3: Early Stopping Iterations (if available)
+        if 'early_stopping_info' in cv_results and cv_results['early_stopping_info']:
+            early_stop_info = cv_results['early_stopping_info']
+            iterations = [info['best_iteration'] for info in early_stop_info if info['best_iteration'] is not None]
+            
+            if iterations:
+                axes[1,0].plot(range(1, len(iterations)+1), iterations, 'o-', color='orange', 
+                            linewidth=2, markersize=8, label='Best Iteration')
+                axes[1,0].axhline(np.mean(iterations), color='red', linestyle='--', 
+                                linewidth=2, label=f'Mean: {np.mean(iterations):.0f}')
+                axes[1,0].fill_between(range(len(iterations)+2), 
+                                    np.mean(iterations) - np.std(iterations), 
+                                    np.mean(iterations) + np.std(iterations), 
+                                    alpha=0.2, color='red')
+                axes[1,0].set_xlabel('Fold Number')
+                axes[1,0].set_ylabel('Best Iteration (Early Stopping)')
+                axes[1,0].set_title('Early Stopping Analysis')
+                axes[1,0].legend()
+                axes[1,0].grid(True, alpha=0.3)
+                axes[1,0].set_xlim(0.5, len(iterations) + 0.5)
+        else:
+            # If no early stopping, show score distribution
+            axes[1,0].violinplot([cv_scores], positions=[1], showmeans=True, showmedians=True)
+            axes[1,0].set_ylabel('RMSE')
+            axes[1,0].set_title('Score Distribution')
+            axes[1,0].set_xticks([1])
+            axes[1,0].set_xticklabels(['CV Scores'])
+            axes[1,0].grid(True, alpha=0.3)
+        
+        # Plot 4: Performance comparison - sorted scores
+        sorted_scores = np.sort(cv_scores)
+        axes[1,1].bar(range(1, len(sorted_scores)+1), sorted_scores, 
+                    color=plt.cm.RdYlGn_r(sorted_scores / sorted_scores.max()), 
+                    edgecolor='black', linewidth=1)
+        axes[1,1].axhline(mean_score, color='red', linestyle='--', linewidth=2, 
+                        label=f'Mean: {mean_score:.3f}')
+        axes[1,1].set_xlabel('Fold (sorted by performance)')
+        axes[1,1].set_ylabel('RMSE')
+        axes[1,1].set_title('Sorted Fold Performance')
+        axes[1,1].legend()
+        axes[1,1].grid(True, alpha=0.3)
+        
+        # Add overall statistics as text
+        stats_text = f'Mean: {mean_score:.3f}\nStd: {std_score:.3f}\nMin: {cv_scores.min():.3f}\nMax: {cv_scores.max():.3f}'
+        fig.text(0.02, 0.02, stats_text, fontsize=10, 
+                bbox=dict(boxstyle="round,pad=0.5", facecolor="lightgray", alpha=0.8))
+        
+        plt.tight_layout()
+        if save_path:
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        plt.show() #to comment out after giving out for mark !!!!!!
+        
+        return fig
+
+    def plot_training_curves(self, training_history: Dict[str, Any], save_path: Optional[str] = None):
+        """Plot training curves showing model learning progress"""
+        import matplotlib.pyplot as plt
+        import numpy as np
+        
+        fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+        
+        # Assuming training_history contains eval results from XGBoost
+        if 'validation_0' in training_history:
+            train_scores = training_history['validation_0']['rmse']
+            epochs = range(1, len(train_scores) + 1)
+            
+            # Plot 1: Training curve
+            axes[0,0].plot(epochs, train_scores, 'b-', linewidth=2, label='Training RMSE')
+            if 'validation_1' in training_history:
+                val_scores = training_history['validation_1']['rmse']
+                axes[0,0].plot(epochs, val_scores, 'r-', linewidth=2, label='Validation RMSE')
+                
+                # Find best epoch
+                best_epoch = np.argmin(val_scores) + 1
+                best_score = val_scores[best_epoch - 1]
+                axes[0,0].plot(best_epoch, best_score, 'go', markersize=10, 
+                            label=f'Best: {best_score:.3f} @ epoch {best_epoch}')
+            
+            axes[0,0].set_xlabel('Epoch')
+            axes[0,0].set_ylabel('RMSE')
+            axes[0,0].set_title('Training Progress')
+            axes[0,0].legend()
+            axes[0,0].grid(True, alpha=0.3)
+            
+            # Plot 2: Log scale view
+            axes[0,1].semilogy(epochs, train_scores, 'b-', linewidth=2, label='Training RMSE')
+            if 'validation_1' in training_history:
+                axes[0,1].semilogy(epochs, val_scores, 'r-', linewidth=2, label='Validation RMSE')
+            axes[0,1].set_xlabel('Epoch')
+            axes[0,1].set_ylabel('RMSE (log scale)')
+            axes[0,1].set_title('Training Progress (Log Scale)')
+            axes[0,1].legend()
+            axes[0,1].grid(True, alpha=0.3)
+            
+            # Plot 3: Improvement rate
+            if len(train_scores) > 1:
+                improvement = -np.diff(train_scores)
+                axes[1,0].plot(epochs[1:], improvement, 'g-', linewidth=2)
+                axes[1,0].axhline(0, color='red', linestyle='--', alpha=0.5)
+                axes[1,0].set_xlabel('Epoch')
+                axes[1,0].set_ylabel('RMSE Improvement')
+                axes[1,0].set_title('Training Improvement per Epoch')
+                axes[1,0].grid(True, alpha=0.3)
+            
+            # Plot 4: Overfitting detection
+            if 'validation_1' in training_history:
+                gap = np.array(val_scores) - np.array(train_scores)
+                axes[1,1].plot(epochs, gap, 'orange', linewidth=2)
+                axes[1,1].axhline(0, color='red', linestyle='--', alpha=0.5)
+                axes[1,1].fill_between(epochs, 0, gap, where=(gap > 0), 
+                                    alpha=0.3, color='red', label='Overfitting')
+                axes[1,1].set_xlabel('Epoch')
+                axes[1,1].set_ylabel('Validation - Training RMSE')
+                axes[1,1].set_title('Overfitting Analysis')
+                axes[1,1].legend()
+                axes[1,1].grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        if save_path:
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        plt.show() #to comment out after giving out for mark !!!!!!
+        
+        return fig
+
+
     def create_diagnostic_plots(self, results: Dict[str, Any], plot_path: str) -> str:
         """
         Create comprehensive diagnostic plots for model evaluation.
@@ -741,7 +945,9 @@ class XGBoostModelTrainer:
                    create_plots: bool = True,
                    perform_cv: bool = False,
                    cv_folds: int = 5,
-                   advanced_cv: bool = False) -> Dict[str, Any]:
+                   advanced_cv: bool = False,
+                   plot_cv_results: bool = False,
+                   plot_training_curves: bool = False) -> Dict[str, Any]:
         """
         Main training function with parameter optimization options.
         
@@ -770,9 +976,6 @@ class XGBoostModelTrainer:
         print("Starting Enhanced XGBoost Training Pipeline")
         print("=" * 70)
         print(f"Device: {self.device_info['device_name'].upper()}")
-        if self.device_info['cuda_available']:
-            print(f"CUDA Devices: {self.device_info['cuda_device_count']}")
-        print("=" * 70)
         
         start_time = datetime.now()
         
@@ -785,7 +988,7 @@ class XGBoostModelTrainer:
         print(f"Model directory: {paths['model_dir']}")
         
         # Data preparation
-        X_train, X_val, X_test, y_train, y_val, y_test = self.prepare_data_splits(
+        X_train, X_val, X_test, y_train, y_val, y_test, stratification_used = self.prepare_data_splits(
             X, y, test_size, eval_size
         )
         
@@ -817,6 +1020,24 @@ class XGBoostModelTrainer:
                 optimization_results = self.optimize_parameters_optuna(
                     X_train_processed, y_train, X_val_processed, y_val, **opt_params
                 )
+
+                if optimization_results:
+                    # Save the Optuna study object
+                    study_path = os.path.join(paths['model_dir'], f"{versioned_model_name}_optuna_study.joblib")
+                    joblib.dump(optimization_results['study'], study_path)
+                    print(f"Optuna study saved: {study_path}")
+                    
+                    # Also save as database for Optuna dashboard compatibility - for later checkout 
+                    try:
+                        import sqlite3
+                        db_path = os.path.join(paths['model_dir'], f"{versioned_model_name}_optuna.db")
+                        optimization_results['study'].trials_dataframe().to_sql(
+                            'trials', sqlite3.connect(db_path), if_exists='replace', index=False
+                        )
+                        print(f"Optuna database saved: {db_path}")
+                    except Exception as e:
+                        print(f"Could not save Optuna database: {e}")
+
                 best_params = optimization_results['best_params']
                 
             elif optimization_method == 'random':
@@ -844,7 +1065,7 @@ class XGBoostModelTrainer:
                 best_params.update(custom_params)
                 
             else:
-                # Add some sensible defaults
+                # Add some defaults
                 best_params.update({
                     'n_estimators': 1000,
                     'learning_rate': 0.05,
@@ -874,7 +1095,7 @@ class XGBoostModelTrainer:
                     X_full_processed, y, best_params, cv_folds
                 )
                 print(f"CV RMSE: {cv_results['cv_mean']:.2f} ± {cv_results['cv_std']:.2f}")
-        
+                
         # Train final model
         print(f"\nTraining final model with parameters:")
         for key, value in best_params.items():
@@ -886,10 +1107,12 @@ class XGBoostModelTrainer:
         print("\nTraining in progress...")
         xgb_model.fit(
             X_train_processed, y_train,
-            eval_set=[(X_val_processed, y_val)],
+            eval_set=[(X_train_processed, y_train), (X_val_processed, y_val)],
             verbose=False
         )
         
+        training_history = xgb_model.evals_result()
+
         # Create pipeline
         pipeline = Pipeline([
             ('preprocessor', preprocessor),
@@ -979,11 +1202,18 @@ class XGBoostModelTrainer:
                 'numerical_features': numerical_features,
                 'categorical_features': categorical_features
             },
+        'stratification_used_in_split': stratification_used,
+        'split_params': {
+            'test_size': test_size,
+            'eval_size': eval_size,
+            'random_state_split': self.random_state
+        },
             'model_params': best_params,
             'performance_metrics': metrics,
             'cross_validation': cv_results,
             'optimization_results': optimization_results,
-            'best_iteration': getattr(xgb_model, 'best_iteration', None)
+            'best_iteration': getattr(xgb_model, 'best_iteration', None),
+            'training_history': training_history 
         }
         
         # Save model and metadata
@@ -1001,6 +1231,9 @@ class XGBoostModelTrainer:
             'xgb_model': xgb_model,
             'preprocessor': preprocessor,
             
+            # History
+            'model_metadata': model_metadata,
+
             # Original data splits
             'X_train_original': X_train,
             'X_val_original': X_val,
@@ -1036,6 +1269,21 @@ class XGBoostModelTrainer:
             plot_path = self.create_diagnostic_plots(results, paths['plot_path'])
             results['plot_path'] = plot_path
         
+        if create_plots and plot_cv_results and cv_results:
+            print("Creating CV visualization...")
+            # Use paths['plot_dir'] directly
+            cv_plot_path = os.path.join(paths['plot_dir'], f"{versioned_model_name}_cv_results.png")
+            self.plot_cv_results(cv_results, cv_plot_path)
+            results['cv_plot_path'] = cv_plot_path
+        
+        # Create training curve plots if enabled
+        if create_plots and plot_training_curves and training_history:
+            print("Creating training curve plots...")
+            # Use paths['plot_dir'] directly
+            training_curve_path = os.path.join(paths['plot_dir'], f"{versioned_model_name}_training_curves.png")
+            self.plot_training_curves(training_history, training_curve_path)
+            results['training_curve_path'] = training_curve_path
+
         print(f"\nTraining completed successfully!")
         print(f"Total time: {training_duration:.1f}s")
         print(f"Final test RMSE: {metrics['test']['rmse']:.2f} days")
@@ -1047,10 +1295,7 @@ class XGBoostModelTrainer:
         return results
 
 
-
-# Add these features to your trainer:
-
-# 1. Feature importance analysis by category
+# Feature importance analysis by category
 def analyze_feature_importance_by_category(self, feature_importance_df, feature_categories):
     """Group feature importance by conceptual categories"""
     category_importance = {}
@@ -1062,25 +1307,11 @@ def analyze_feature_importance_by_category(self, feature_importance_df, feature_
         category_importance[category] = cat_importance
     return category_importance
 
-# 2. Add stratified sampling option for train/test split
-def prepare_data_splits(self, X, y, test_size=0.2, eval_size=0.15, stratify_on=None):
-    """Enhanced splitting with optional stratification"""
-    if stratify_on is not None:
-        # For regression, bin the target for stratification
-        y_bins = pd.qcut(y, q=5, labels=['Very Fast', 'Fast', 'Normal', 'Slow', 'Very Slow'])
-        X_train_full, X_test, y_train_full, y_test = train_test_split(
-            X, y, test_size=test_size, random_state=self.random_state, 
-            stratify=y_bins
-        )
-    # ... rest of the method
-
-# 3. Add feature selection option
+# Add feature selection option
 def select_top_features(self, X, y, feature_importance_df, top_n=30):
     """Select top N most important features"""
     top_features = feature_importance_df.head(top_n)['feature'].tolist()
     return X[top_features]
-
-
 
 def load_model_for_xai(model_path: str) -> Dict[str, Any]:
     """Load a saved model with all components for XAI analysis."""
