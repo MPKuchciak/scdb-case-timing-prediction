@@ -12,6 +12,7 @@ from datetime import datetime
 from tqdm import tqdm
 import warnings
 from typing import Dict, List, Optional, Union, Tuple, Any
+import pynvml
 
 # Optimization libraries
 import optuna
@@ -76,38 +77,71 @@ class XGBoostModelTrainer:
                 print(f"Created directory: {directory}")
     
     def _setup_device(self) -> Dict[str, Any]:
-        """Setup and detect CUDA availability for XGBoost."""
+        """Setup and detect CUDA availability for XGBoost using pynvml."""
         device_info = {
             'cuda_available': False,
             'cuda_device_count': 0,
             'device_name': 'cpu',
             'tree_method': 'hist'
         }
-        
+
         if self.enable_cuda:
             try:
-                # Check if CUDA is available for XGBoost
-                import subprocess
-                result = subprocess.run(['nvidia-smi'], capture_output=True, text=True)
-                if result.returncode == 0:
+                pynvml.nvmlInit()
+                device_count = pynvml.nvmlDeviceGetCount()
+                if device_count > 0:
                     device_info['cuda_available'] = True
                     device_info['device_name'] = 'cuda'
                     device_info['tree_method'] = 'gpu_hist'
-                    # Try to get device count
-                    try:
-                        gpu_count = result.stdout.count('GPU') #3?
-                        device_info['cuda_device_count'] = gpu_count
-                    except:
-                        device_info['cuda_device_count'] = 1
-                    print(f"CUDA detected: {device_info['cuda_device_count']} GPU(s) available")
+                    device_info['cuda_device_count'] = device_count
+                    print(f"CUDA detected: {device_count} GPU(s) available.")
                 else:
-                    print("CUDA not available, using CPU")
+                    print("CUDA enabled, but no NVIDIA GPUs found. Using CPU.")
+                pynvml.nvmlShutdown()
+            except pynvml.NVMLError as e:
+                print(f"CUDA check failed (could not communicate with NVIDIA driver): {e}. Using CPU.")
             except Exception as e:
-                print(f"CUDA check failed: {e}, using CPU")
+                print(f"An unexpected error occurred during CUDA check: {e}. Using CPU.")
         else:
-            print("CUDA disabled, using CPU")
-            
+            print("CUDA disabled by user. Using CPU.")
+
         return device_info
+
+    # def _setup_device(self) -> Dict[str, Any]: -> old part for deletion
+    #     """Setup and detect CUDA availability for XGBoost."""
+    #     device_info = {
+    #         'cuda_available': False,
+    #         'cuda_device_count': 0,
+    #         'device_name': 'cpu',
+    #         'tree_method': 'hist'
+    #     }
+        
+    #     if self.enable_cuda: 
+    #         try:
+    #             # Check if CUDA is available for XGBoost
+    #             import subprocess
+    #             result = subprocess.run(['nvidia-smi'], capture_output=True, text=True)
+    #             if result.returncode == 0:
+    #                 device_info['cuda_available'] = True
+    #                 device_info['device_name'] = 'cuda'
+    #                 device_info['tree_method'] = 'gpu_hist'
+    #                 # Try to get device count
+    #                 try:
+    #                     gpu_count = result.stdout.count('GPU') #3?
+    #                     device_info['cuda_device_count'] = gpu_count
+    #                 except:
+    #                     device_info['cuda_device_count'] = 1
+    #                 print(f"CUDA detected: {device_info['cuda_device_count']} GPU(s) available")
+    #             else:
+    #                 print("CUDA not available, using CPU")
+    #         except Exception as e:
+    #             print(f"CUDA check failed: {e}, using CPU")
+    #     else:
+    #         print("CUDA disabled, using CPU")
+            
+    #     return device_info
+
+
     
     def _get_next_version(self, base_name: str) -> str:
         """
