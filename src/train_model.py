@@ -962,6 +962,193 @@ class XGBoostModelTrainer:
         print(f"Diagnostic plots saved: {plot_path}")
         return plot_path
     
+####################################################################### TESTING ##########################################
+    def create_time_based_splits(self, X: pd.DataFrame, y: pd.Series, 
+                            time_col: str = 'year_of_argument',
+                            test_size: float = 0.2) -> Tuple:
+        """
+        Create time-based train/test split for temporal validation.
+        
+        Args:
+            X: Feature matrix
+            y: Target variable
+            time_col: Column name for time-based sorting
+            test_size: Proportion of data to use as test (from most recent)
+            
+        Returns:
+            Tuple of (X_train, X_test, y_train, y_test)
+        """
+        if time_col not in X.columns:
+            raise ValueError(f"Time column '{time_col}' not found in data")
+        
+        # Combine X and y with index preservation
+        data = X.copy()
+        data['_target'] = y
+        
+        # Sort by time
+        data_sorted = data.sort_values(time_col)
+        
+        # Split point
+        split_idx = int(len(data_sorted) * (1 - test_size))
+        
+        # Create splits
+        train_data = data_sorted.iloc[:split_idx]
+        test_data = data_sorted.iloc[split_idx:]
+        
+        # Separate features and target
+        X_train = train_data.drop('_target', axis=1)
+        y_train = train_data['_target']
+        X_test = test_data.drop('_target', axis=1)
+        y_test = test_data['_target']
+        
+        print(f"Time-based split created:")
+        print(f"  Train: {len(X_train)} samples (up to {train_data[time_col].max()})")
+        print(f"  Test: {len(X_test)} samples (from {test_data[time_col].min()})")
+        
+        return X_train, X_test, y_train, y_test
+
+    def select_top_features_from_importance(self, 
+                                        feature_importance_df: pd.DataFrame,
+                                        X: pd.DataFrame,
+                                        threshold: Union[int, float, str] = 30) -> List[str]:
+        """
+        Select features based on importance scores.
+        
+        Args:
+            feature_importance_df: DataFrame with 'feature' and 'importance' columns
+            X: Original feature matrix (to validate feature names)
+            threshold: Either:
+                - int: Select top N features
+                - float (0-1): Select features capturing X% of total importance
+                - str: 'median' or 'mean' to use statistical threshold
+                
+        Returns:
+            List of selected feature names
+        """
+        # Sort by importance
+        sorted_importance = feature_importance_df.sort_values('importance', ascending=False)
+        
+        if isinstance(threshold, int):
+            # Select top N
+            selected_features = sorted_importance.head(threshold)['feature'].tolist()
+            print(f"Selected top {threshold} features")
+            
+        elif isinstance(threshold, float) and 0 < threshold < 1:
+            # Select features that capture X% of importance
+            sorted_importance['cumsum'] = sorted_importance['importance'].cumsum()
+            total_importance = sorted_importance['importance'].sum()
+            threshold_value = total_importance * threshold
+            selected_features = sorted_importance[sorted_importance['cumsum'] <= threshold_value]['feature'].tolist()
+            print(f"Selected features capturing {threshold*100:.1f}% of total importance")
+            
+        elif threshold == 'median':
+            # Select features above median importance
+            median_importance = sorted_importance['importance'].median()
+            selected_features = sorted_importance[sorted_importance['importance'] > median_importance]['feature'].tolist()
+            print(f"Selected features above median importance ({median_importance:.4f})")
+            
+        elif threshold == 'mean':
+            # Select features above mean importance
+            mean_importance = sorted_importance['importance'].mean()
+            selected_features = sorted_importance[sorted_importance['importance'] > mean_importance]['feature'].tolist()
+            print(f"Selected features above mean importance ({mean_importance:.4f})")
+            
+        else:
+            raise ValueError(f"Invalid threshold: {threshold}")
+        
+        # Validate features exist in X
+        valid_features = [f for f in selected_features if f in X.columns]
+        if len(valid_features) < len(selected_features):
+            print(f"Warning: {len(selected_features) - len(valid_features)} features not found in data")
+        
+        print(f"Final selection: {len(valid_features)} features")
+        return valid_features
+
+    def create_ensemble_predictions(self, model_paths: List[str], X_test: pd.DataFrame,
+                                weights: Optional[List[float]] = None) -> np.ndarray:
+        """
+        Create ensemble predictions from multiple saved models.
+        
+        Args:
+            model_paths: List of paths to saved model files
+            X_test: Test data for predictions
+            weights: Optional weights for each model (must sum to 1)
+            
+        Returns:
+            Array of ensemble predictions
+        """
+        if weights is not None and abs(sum(weights) - 1.0) > 1e-6:
+            raise ValueError("Weights must sum to 1.0")
+        
+        predictions = []
+        
+        for i, model_path in enumerate(model_paths):
+            if not os.path.exists(model_path):
+                print(f"Warning: Model not found at {model_path}, skipping...")
+                continue
+                
+            # Load model
+            pipeline = joblib.load(model_path)
+            
+            # Make predictions
+            pred = pipeline.predict(X_test)
+            predictions.append(pred)
+            print(f"Loaded model {i+1}/{len(model_paths)}: {os.path.basename(model_path)}")
+        
+        if not predictions:
+            raise ValueError("No valid models found")
+        
+        # Create ensemble
+        predictions_array = np.array(predictions)
+        
+        if weights is None:
+            # Simple average
+            ensemble_pred = np.mean(predictions_array, axis=0)
+            print("Created simple average ensemble")
+        else:
+            # Weighted average
+            ensemble_pred = np.average(predictions_array, axis=0, weights=weights[:len(predictions)])
+            print("Created weighted average ensemble")
+        
+        return ensemble_pred
+
+    def evaluate_ensemble(self, y_true: np.ndarray, ensemble_pred: np.ndarray,
+                        individual_preds: Optional[List[np.ndarray]] = None) -> Dict[str, float]:
+        """
+        Evaluate ensemble performance and compare to individual models.
+        
+        Args:
+            y_true: True target values
+            ensemble_pred: Ensemble predictions
+            individual_preds: Optional list of individual model predictions
+            
+        Returns:
+            Dictionary of metrics
+        """
+        ensemble_metrics = {
+            'rmse': np.sqrt(mean_squared_error(y_true, ensemble_pred)),
+            'mae': mean_absolute_error(y_true, ensemble_pred),
+            'r2': r2_score(y_true, ensemble_pred)
+        }
+        
+        print(f"\nEnsemble Performance:")
+        print(f"  RMSE: {ensemble_metrics['rmse']:.2f}")
+        print(f"  MAE: {ensemble_metrics['mae']:.2f}")
+        print(f"  R²: {ensemble_metrics['r2']:.4f}")
+        
+        if individual_preds:
+            print(f"\nIndividual Model Performance:")
+            for i, pred in enumerate(individual_preds):
+                rmse = np.sqrt(mean_squared_error(y_true, pred))
+                print(f"  Model {i+1} RMSE: {rmse:.2f}")
+        
+        return ensemble_metrics
+####################################################################### TESTING ##########################################
+
+
+
+
+
     def train_model(self, 
                    X: pd.DataFrame, 
                    y: pd.Series,
