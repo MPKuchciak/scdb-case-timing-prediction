@@ -1,4 +1,4 @@
-# Analysis of U.S. Supreme Court Case Duration: A Study on Prediction and Data Leakage
+# Analysis of U.S. Supreme Court Case Duration:   A Study on Prediction and Data Leakage
 
 <!-- [![Python Version](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://www.python.org/downloads/) -->
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -29,20 +29,18 @@ scdb-case-timing-prediction/
 ├── data/
 │   ├── raw/                          # For original, immutable data
 │   │   ├── SCDB_2024_01_caseCentered_Docket.csv
-│   │   └── SCDB_2024_01_caseCentered_Vote.csv # If used
-│   ├── processed/                      # For cleaned, transformed data 
-│   │   ├── scdb_processed_part1.csv    # Output of 001_DataCleaning.ipynb
-│   │   └── scdb_eda.csv                # Data for EDA notebook
-│   └── external/                       # For any other external data
+│   │   └── SCDB_2024_01_caseCentered_Vote.csv # Not used in this project
+│   └── processed/                      # For cleaned, transformed data 
+│       ├── scdb_processed_part2.csv    # Output of 001_DataCleaning.ipynb
+│       └── scdb_eda.csv                # Output from EDA notebook
+|
 ├── notebooks/                        # For all Jupyter notebooks
 │   ├── 001_DataCleaning.ipynb
-│   ├── 002_EDA.ipynb                 # Renamed from eda.ipynb for sequence
-│   └── 003_ModelXGboost.ipynb        # Renamed from ModelXGboost.ipynb for sequence
+│   ├── 002_EDA.ipynb                 
+│   └── 003_XGB_XAI.ipynb       
 ├── src/                              # For Python source code (.py files, utility scripts)
 ├── models/                           # For saved trained models (e.g., .pkl, .joblib files)
 ├── presentation/                     # For slides, presentation materials
-├── reports/                          # For generated reports, figures
-│   └── figures/                      # For plots saved from notebooks/scripts
 ├── docs/                             # For documentation
 │   ├── SCDB_2024_01_codebook.pdf
 │   └── variable_description.pdf
