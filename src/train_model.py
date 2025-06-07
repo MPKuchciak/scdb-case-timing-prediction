@@ -51,7 +51,7 @@ class XGBoostModelTrainer:
     """
     
     def __init__(self, output_dir: str = "../models", enable_cuda: bool = True, 
-                 plot_dir: str = "../plots", random_state: int = 420, 
+                 random_state: int = 420, #plot_dir: str = "../plots", 
                  organize_by_model: bool = True):
         """
         Initialize the trainer.
@@ -59,19 +59,19 @@ class XGBoostModelTrainer:
         Args:
             output_dir (str): Directory to save models and metadata
             enable_cuda (bool): Whether to attempt CUDA acceleration
-            plot_dir (str): Directory to save plots
+            plot_dir (str): Directory to save plots -> deleted
             random_state (int): Global random seed
             organize_by_model (bool): Create separate folders for each model
         """
         self.output_dir = output_dir
-        self.plot_dir = plot_dir
+        #self.plot_dir = plot_dir
         self.random_state = random_state
         self.enable_cuda = enable_cuda
         self.organize_by_model = organize_by_model
         self.device_info = self._setup_device()
         
         # Create directories
-        for directory in [output_dir, plot_dir]:
+        for directory in [output_dir]: #, plot_dir
             if not os.path.exists(directory):
                 os.makedirs(directory)
                 print(f"Created directory: {directory}")
