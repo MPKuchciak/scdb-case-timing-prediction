@@ -119,8 +119,8 @@ The data for this project comes from the **Supreme Court Database (SCDB)**, a co
 The comparative modeling approach yielded critical insights into both prediction and the practical challenges of data leakage.
 
 * **Modeling Scenarios**: Two primary modeling scenarios were evaluated to understand the impact of feature availability:
-    * **Model with Data Leakage**: This model was trained with all available features, including those known after a case is decided. It achieved a very high **R-squared of 0.92**, serving as a theoretical upper benchmark.
-    * **Model without Data Leakage**: This model was carefully trained using only features that would be available at the time of prediction. It achieved a more realistic and practical **R-squared of 0.78**.
+    * **Model with Data Leakage**: This model was trained with all available features, including those known after a case is decided. It achieved a very high **R-squared of x**, serving as a theoretical upper benchmark.
+    * **Model without Data Leakage**: This model was trained using only features that would be available at the time of prediction. It achieved a more realistic and practical **R-squared of y**.
 
 * **Impact of Data Leakage**: The comparison starkly illustrates the effect of data leakage. In the "leaky" model, features like `decisionType` and `partyWinning` were overwhelmingly dominant, artificially inflating performance and providing no real predictive value for future cases.
 
