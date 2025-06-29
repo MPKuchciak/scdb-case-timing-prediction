@@ -18,6 +18,11 @@ ENV/
 .ipynb_checkpoints/
 notebooks/.ipynb_checkpoints/ # If you move notebooks to a notebooks/ folder
 
+# Models
+# Ignore all contents of the models directory
+models/
+!models/.gitkeep
+
 # IDE / Editor specific
 .vscode/
 .idea/
