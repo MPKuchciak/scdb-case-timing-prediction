@@ -70,18 +70,6 @@ To get this project up and running on your local machine, follow these steps.
     pip install -r requirements.txt
     ```
 
-4.  **PyTorch Installation (if needed):**
-    Codes require PyTorch, install it using the command from the [official website](https://pytorch.org/get-started/locally/).
-
-    * **For CPU-only:**
-        ```bash
-        pip install torch torchvision torchaudio
-        ```
-    * **For GPU (NVIDIA with CUDA):** Check your CUDA version and use the corresponding command from the PyTorch website. For example, for CUDA 12.1:
-        ```bash
-        pip install torch torchvision torchaudio --index-url [https://download.pytorch.org/whl/cu121](https://download.pytorch.org/whl/cu121)
-        ```
-
 ---
 
 ## Workflow and Usage
