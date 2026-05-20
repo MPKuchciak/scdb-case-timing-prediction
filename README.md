@@ -1,7 +1,7 @@
 # Analysis of U.S. Supreme Court Case Duration:   A Study on Prediction and Data Leakage
 
 <!-- [![Python Version](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://www.python.org/downloads/) -->
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white) ![XGBoost](https://img.shields.io/badge/XGBoost-189AB4?style=flat&logoColor=white) ![Jupyter](https://img.shields.io/badge/Jupyter-F37626?style=flat&logo=jupyter&logoColor=white) ![SHAP](https://img.shields.io/badge/SHAP-FF6B6B?style=flat&logoColor=white) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 This project conducts a comprehensive analysis of U.S. Supreme Court case durations using the Supreme Court Database (SCDB). The core of the project involves developing and comparing two distinct modeling approaches: one that intentionally includes features prone to data leakage to establish a performance ceiling, and a second, more realistic model that carefully controls for such information. The goal is to build a practical predictive model while demonstrating the impact of data leakage on model performance and interpretation using Explainable AI (XAI).
 
