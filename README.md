@@ -23,7 +23,6 @@ The repository is organized to ensure clarity and reproducibility.
 
 ```
 scdb-case-timing-prediction/
-├── .git/                             # Git's internal directory
 ├── .gitattributes                    # Defines attributes for paths
 ├── .gitignore                        # Specifies intentionally untracked files
 ├── data/
