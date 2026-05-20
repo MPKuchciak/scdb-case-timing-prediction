@@ -4,8 +4,3 @@
 # Notebooks - treat as Python for language stats
 *.ipynb text diff=ipynb
 *.ipynb linguist-language=Python
-
-# Uncomment if using Git LFS:
-# data/raw/*.csv filter=lfs diff=lfs merge=lfs -text
-# models/*.joblib filter=lfs diff=lfs merge=lfs -text
-# models/*.pkl filter=lfs diff=lfs merge=lfs -text
