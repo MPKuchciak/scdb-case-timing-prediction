@@ -56,8 +56,7 @@ To get this project up and running on your local machine, follow these steps.
 
 1.  **Clone the repository:**
     ```bash
-    git clone [https://github.com/your-username/scdb-case-timing-prediction.git](https://github.com/your-username/scdb-case-timing-prediction.git)
-    cd scdb-case-timing-prediction
+    git clone https://github.com/MPKuchciak/scdb-case-timing-prediction.git
     ```
 
 2.  **Create a virtual environment (recommended):**
