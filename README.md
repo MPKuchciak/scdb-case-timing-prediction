@@ -1,6 +1,5 @@
-# Analysis of U.S. Supreme Court Case Duration:   A Study on Prediction and Data Leakage
+# Analysis of U.S. Supreme Court Case Duration: A Study on Prediction and Data Leakage
 
-<!-- [![Python Version](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://www.python.org/downloads/) -->
 ![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white) ![XGBoost](https://img.shields.io/badge/XGBoost-189AB4?style=flat&logoColor=white) ![Jupyter](https://img.shields.io/badge/Jupyter-F37626?style=flat&logo=jupyter&logoColor=white) ![SHAP](https://img.shields.io/badge/SHAP-FF6B6B?style=flat&logoColor=white) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 This project conducts a comprehensive analysis of U.S. Supreme Court case durations using the Supreme Court Database (SCDB). The core of the project involves developing and comparing two distinct modeling approaches: one that intentionally includes features prone to data leakage to establish a performance ceiling, and a second, more realistic model that carefully controls for such information. The goal is to build a practical predictive model while demonstrating the impact of data leakage on model performance and interpretation using Explainable AI (XAI).
@@ -19,101 +18,105 @@ This project conducts a comprehensive analysis of U.S. Supreme Court case durati
 ---
 
 ## Project Structure
-The repository is organized to ensure clarity and reproducibility.
 
 ```
 scdb-case-timing-prediction/
-├── .gitattributes                    # Defines attributes for paths
-├── .gitignore                        # Specifies intentionally untracked files
+├── .gitattributes
+├── .gitignore
 ├── data/
-│   ├── raw/                          # For original, immutable data
+│   ├── model_results/
+│   │   └── model_comparison_comprehensive.csv  # All model run metrics
+│   ├── raw/                                     # Original, immutable data (not committed)
 │   │   ├── SCDB_2024_01_caseCentered_Docket.csv
-│   │   └── SCDB_2024_01_caseCentered_Vote.csv # Not used in this project
-│   └── processed/                      # For cleaned, transformed data 
-│       ├── scdb_processed_part2.csv    # Output of 001_DataCleaning.ipynb
-│       └── scdb_eda.csv                # Output from EDA notebook
-|
-├── notebooks/                        # For all Jupyter notebooks
+│   │   └── SCDB_2024_01_caseCentered_Vote.csv
+│   └── processed/                               # Cleaned, transformed data (not committed)
+│       ├── scdb_processed_part2.csv
+│       └── scdb_eda.csv
+├── notebooks/
+│   ├── 000_PackageInstallation.ipynb
 │   ├── 001_DataCleaning.ipynb
-│   ├── 002_EDA.ipynb                 
-│   └── 003_XGB_XAI.ipynb       
-├── src/                              # For Python source code (.py files, utility scripts)
-├── models/                           # For saved trained models (e.g., .pkl, .joblib files)
-├── presentation/                     # For slides, presentation materials
-├── docs/                             # For documentation
+│   ├── 002_EDA.ipynb
+│   └── 003_XGB_XAI.ipynb
+├── src/
+│   ├── model_utils.py                           # Model loading and data split utilities
+│   └── toc_generator.py                         # Notebook TOC generator utility
+├── models/                                      # Saved trained models (.pkl, .joblib)
+├── presentation/                                # Slides and presentation materials
+├── docs/
 │   ├── SCDB_2024_01_codebook.pdf
 │   └── variable_description.pdf
-├── archive/                          # For old/unused files
-├── README.md                         # Project overview, setup, how to run
-└── requirements.txt                  # Python package dependencies
+├── archive/
+├── README.md
+└── requirements.txt
 ```
 
 ---
 
 ## Installation
 
-To get this project up and running on your local machine, follow these steps.
+1. **Clone the repository:**
+```bash
+   git clone https://github.com/MPKuchciak/scdb-case-timing-prediction.git
+   cd scdb-case-timing-prediction
+```
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/MPKuchciak/scdb-case-timing-prediction.git
-    ```
+2. **Create a virtual environment (recommended):**
+```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
 
-2.  **Create a virtual environment (recommended):**
-    ```bash
-    python -m venv venv
-    source venv/bin/activate  # On Windows: venv\Scripts\activate
-    ```
-
-3.  **Install dependencies from `requirements.txt`:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+3. **Install dependencies:**
+```bash
+   pip install -r requirements.txt
+```
 
 ---
 
 ## Workflow and Usage
 
-The project workflow is organized into a series of Jupyter notebooks. Please run them in the specified order for full reproducibility.
+Run the notebooks in order for full reproducibility.
 
-* **1. [notebooks/000_PackageInstallation.ipynb](./notebooks/000_PackageInstallation.ipynb)**
-    * A utility notebook to guide you through installing all necessary packages and dependencies.
+**1. [notebooks/000_PackageInstallation.ipynb](./notebooks/000_PackageInstallation.ipynb)**
+Utility notebook for verifying the environment and managing `requirements.txt`. Includes guidance for both `venv` and `conda` setup.
 
-* **2. [notebooks/001_DataCleaning.ipynb](./notebooks/001_DataCleaning.ipynb)**
-    * This notebook loads the raw data from `data/raw/`, performs extensive cleaning, handles missing values, engineers new features (like case duration), and saves the final cleaned dataset to `data/processed/`.
+**2. [notebooks/001_DataCleaning.ipynb](./notebooks/001_DataCleaning.ipynb)**
+Loads raw SCDB data, performs cleaning, handles missing values, engineers features (including case duration), and saves the processed dataset to `data/processed/`.
 
-* **3. [notebooks/002_EDA.ipynb](./notebooks/002_EDA.ipynb)**
-    * Conducts a thorough Exploratory Data Analysis (EDA) on the processed data to uncover trends, distributions, and correlations between variables.
+**3. [notebooks/002_EDA.ipynb](./notebooks/002_EDA.ipynb)**
+Exploratory Data Analysis on the processed data — distributions, trends, and correlations between variables.
 
-* **4. [notebooks/003_XGB_XAI.ipynb](./notebooks/003_XGB_XAI.ipynb)**
-    * This is the core modeling notebook. It develops and compares multiple XGBoost models, including scenarios with and without data leakage. It evaluates their performance and uses Explainable AI (XAI) techniques like SHAP to interpret the differences in feature importance between the models.
+**4. [notebooks/003_XGB_XAI.ipynb](./notebooks/003_XGB_XAI.ipynb)**
+Core modeling notebook. Develops and compares multiple XGBoost models across leaky and non-leaky scenarios using Optuna for hyperparameter tuning. Uses SHAP and DALEX for model interpretation.
 
 ---
 
 ## Data
 
-The data for this project comes from the **Supreme Court Database (SCDB)**, a comprehensive dataset covering case outcomes from 1946 to the present.
+The data comes from the **Supreme Court Database (SCDB)**, covering case outcomes from 1946 to the present.
 
-* **`data/raw/`**: Contains the original, unaltered CSV files downloaded from the SCDB website.
-* **`data/processed/`**: Contains the cleaned and transformed data used for analysis and modeling.
-* **`docs/`**: This directory contains the official **`SCDB_2024_01_codebook.pdf`** and a **`variable_description.pdf`**, which provide detailed information on every variable in the dataset.
+- `data/raw/` — original, unaltered CSV files from the SCDB website (not committed to the repo)
+- `data/processed/` — cleaned and transformed data used for modeling (not committed)
+- `data/model_results/` — model comparison metrics across all training runs
+- `docs/` — official SCDB codebook and variable descriptions
 
 ---
 
 ## Key Results
 
-The comparative modeling approach yielded critical insights into both prediction and the practical challenges of data leakage.
+Ten models were trained across three scenarios (basic, leakage-controlled, full leakage) with baseline and Optuna-tuned variants. All models used log-transformed targets where noted.
 
-* **Modeling Scenarios**: Two primary modeling scenarios were evaluated to understand the impact of feature availability:
-    * **Model with Data Leakage**: This model was trained with all available features, including those known after a case is decided. It achieved a very high **R-squared of x**, serving as a theoretical upper benchmark.
-    * **Model without Data Leakage**: This model was trained using only features that would be available at the time of prediction. It achieved a more realistic and practical **R-squared of y**.
+**Model with Data Leakage (log target, Optuna-tuned):** Test R² = **0.967**, Test RMSE = 0.124 — serves as a theoretical upper benchmark. Features like `decisionType` and `partyWinning` dominate, artificially inflating performance.
 
-* **Impact of Data Leakage**: The comparison starkly illustrates the effect of data leakage. In the "leaky" model, features like `decisionType` and `partyWinning` were overwhelmingly dominant, artificially inflating performance and providing no real predictive value for future cases.
+**Model without Data Leakage (log target, Optuna-tuned):** Test R² = **0.480**, Test RMSE = 41.0 days — the practical model using only features available at prediction time.
 
-* **Feature Importance (Practical Model)**: In the practical, non-leaky model, XAI analysis with SHAP revealed that the most influential predictors of case duration were:
-    1.  **Certification Reason (`certReason`)**: The legal grounds on which the case was granted review.
-    2.  **Issue Area (`issueArea`)**: The substantive legal topic of the case (e.g., Civil Rights, Criminal Procedure, Economics).
-    3.  **Case Origin (`caseOrigin`)**: The lower court or state from which the case was appealed.
+**Feature Importance (Practical Model):** SHAP and DALEX analysis agree on the top predictors:
+1. **Days: Term Start to Argument** — by far the strongest predictor; timing within the term drives duration more than case content
+2. **Natural Court Period** — different court compositions show distinct efficiency patterns
+3. **Consolidated Dockets** — direct complexity indicator
+4. **Law Type (Statutory vs Constitutional)** — case type affects processing time
+
+**Key insight:** The leakage comparison starkly illustrates the danger of post-decision features. The practical model confirms that *when* a case is argued in the term is more predictive than *what* the case is about.
 
 ---
 
